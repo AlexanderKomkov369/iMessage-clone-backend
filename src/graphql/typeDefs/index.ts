@@ -1,10 +1,12 @@
+import { IExecutableSchemaDefinition } from "@graphql-tools/schema";
 import userTypeDefs from "./user";
 import conversationTypeDefs from "./conversation";
-import { IExecutableSchemaDefinition } from "@graphql-tools/schema";
+import messagesTypeDefs from "./messages";
 
 const typeDefs: IExecutableSchemaDefinition["typeDefs"] = [
   userTypeDefs,
   conversationTypeDefs,
+  messagesTypeDefs,
 ];
 
 export default typeDefs;
