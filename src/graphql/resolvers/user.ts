@@ -2,6 +2,7 @@ import { GraphQLContext, Resolvers } from "../types/types";
 import { CreateUsernameResponse } from "../types/user/types";
 import { ApolloError } from "apollo-server-core";
 import { User } from "@prisma/client";
+import { NOT_AUTHORIZED_ERROR } from "../../util/constants";
 
 const resolvers: Resolvers = {
   Query: {
@@ -14,7 +15,7 @@ const resolvers: Resolvers = {
       const { prisma, session } = context;
 
       if (!session?.user) {
-        throw new ApolloError("Not authorized");
+        throw new ApolloError(NOT_AUTHORIZED_ERROR);
       }
 
       const {
@@ -52,7 +53,7 @@ const resolvers: Resolvers = {
 
       if (!session?.user) {
         return {
-          error: "Not authorized",
+          error: NOT_AUTHORIZED_ERROR,
         };
       }
 
