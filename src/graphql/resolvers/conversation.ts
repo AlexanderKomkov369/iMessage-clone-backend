@@ -1,8 +1,13 @@
-import { Resolvers } from "../types/types";
-import { ApolloError } from "apollo-server-core";
+import { GraphQLContext, Resolvers } from "../types/types";
 import { NOT_AUTHORIZED_ERROR } from "../../util/constants";
 import { Prisma } from "@prisma/client";
-import { ConversationPopulated } from "../types/conversations/types";
+import {
+  ConversationCreatedSubscriptionPayload,
+  ConversationPopulated,
+} from "../types/conversations/types";
+import { CONVERSATION_CREATED } from "../../pubsub/constants";
+import { withFilter } from "graphql-subscriptions";
+import { GraphQLError } from "graphql/error";
 
 const resolvers: Resolvers = {
   Query: {
@@ -14,7 +19,7 @@ const resolvers: Resolvers = {
       const { prisma, session } = context;
 
       if (!session?.user) {
-        throw new ApolloError(NOT_AUTHORIZED_ERROR);
+        throw new GraphQLError(NOT_AUTHORIZED_ERROR);
       }
 
       const {
@@ -48,7 +53,7 @@ const resolvers: Resolvers = {
       } catch (error) {
         console.log("conversations error: ", error);
         if (error instanceof Error) {
-          throw new ApolloError(error.message);
+          throw new GraphQLError(error.message);
         }
       }
     },
@@ -59,11 +64,11 @@ const resolvers: Resolvers = {
       args: { participantIds: string[] },
       context
     ): Promise<{ conversationId: string } | undefined> => {
-      const { prisma, session } = context;
+      const { prisma, session, pubsub } = context;
       const { participantIds } = args;
 
       if (!session?.user) {
-        throw new ApolloError(NOT_AUTHORIZED_ERROR);
+        throw new GraphQLError(NOT_AUTHORIZED_ERROR);
       }
 
       const {
@@ -85,15 +90,47 @@ const resolvers: Resolvers = {
           include: conversationPopulated,
         });
 
+        // emit pubsub event
+        pubsub.publish(CONVERSATION_CREATED, {
+          conversationCreated: conversation,
+        });
+
         return {
           conversationId: conversation.id,
         };
       } catch (error) {
         console.log("createConversation error: ", error);
         if (error instanceof Error) {
-          throw new ApolloError("Error creating conversation");
+          throw new GraphQLError("Error creating conversation");
         }
       }
+    },
+  },
+  Subscription: {
+    conversationCreated: {
+      subscribe: withFilter(
+        (_, __, context: GraphQLContext) => {
+          const { pubsub } = context;
+
+          return pubsub.asyncIterator([CONVERSATION_CREATED]);
+        },
+        (
+          payload: ConversationCreatedSubscriptionPayload,
+          _,
+          context: GraphQLContext
+        ) => {
+          const { session } = context;
+          const {
+            conversationCreated: { participants },
+          } = payload;
+
+          const userIsParticipant = !!participants.find(
+            (participant) => participant.userId === session?.user?.id
+          );
+
+          return userIsParticipant;
+        }
+      ),
     },
   },
 };

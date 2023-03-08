@@ -1,4 +1,4 @@
-import { gql } from "apollo-server-core";
+import gql from "graphql-tag";
 
 const typeDefs = gql`
   scalar Date
@@ -26,6 +26,10 @@ const typeDefs = gql`
 
   type Query {
     conversations: [Conversation]
+  }
+
+  type Subscription {
+    conversationCreated: Conversation
   }
 `;
 
