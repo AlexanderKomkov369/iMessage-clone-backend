@@ -1,13 +1,13 @@
-import { GraphQLContext, Resolvers } from "../types/types";
 import { NOT_AUTHORIZED_ERROR } from "../../util/constants";
 import { Prisma } from "@prisma/client";
-import {
-  ConversationCreatedSubscriptionPayload,
-  ConversationPopulated,
-} from "../types/conversations/types";
 import { CONVERSATION_CREATED } from "../../pubsub/constants";
 import { withFilter } from "graphql-subscriptions";
 import { GraphQLError } from "graphql/error";
+import { GraphQLContext, Resolvers } from "../types/general";
+import {
+  ConversationCreatedSubscriptionPayload,
+  ConversationPopulated,
+} from "../types/conversations";
 
 const resolvers: Resolvers = {
   Query: {
@@ -93,7 +93,7 @@ const resolvers: Resolvers = {
         // emit pubsub event
         pubsub.publish(CONVERSATION_CREATED, {
           conversationCreated: conversation,
-        });
+        } as ConversationCreatedSubscriptionPayload);
 
         return {
           conversationId: conversation.id,
@@ -109,7 +109,7 @@ const resolvers: Resolvers = {
   Subscription: {
     conversationCreated: {
       subscribe: withFilter(
-        (_, __, context: GraphQLContext) => {
+        (_, __, context) => {
           const { pubsub } = context;
 
           return pubsub.asyncIterator([CONVERSATION_CREATED]);

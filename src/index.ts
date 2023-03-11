@@ -9,13 +9,13 @@ import resolvers from "./graphql/resolvers";
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import * as dotenv from "dotenv";
 import { getSession } from "next-auth/react";
-import { GraphQLContext, SubscriptionContext } from "./graphql/types/types";
 import { PrismaClient } from "@prisma/client";
 import { useServer } from "graphql-ws/lib/use/ws";
 import { PubSub } from "graphql-subscriptions";
 import cors from "cors";
 import { json } from "body-parser";
 import { Session } from "next-auth";
+import { GraphQLContext, SubscriptionContext } from "./graphql/types/general";
 
 async function main() {
   dotenv.config();

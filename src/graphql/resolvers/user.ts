@@ -1,8 +1,8 @@
-import { GraphQLContext, Resolvers } from "../types/types";
-import { CreateUsernameResponse } from "../types/user/types";
 import { User } from "@prisma/client";
 import { NOT_AUTHORIZED_ERROR } from "../../util/constants";
 import { GraphQLError } from "graphql/error";
+import { Resolvers } from "../types/general";
+import { CreateUsernameResponse } from "../types/user";
 
 const resolvers: Resolvers = {
   Query: {
@@ -46,7 +46,7 @@ const resolvers: Resolvers = {
     createUsername: async (
       _: any,
       args: { username: string },
-      context: GraphQLContext
+      context
     ): Promise<CreateUsernameResponse> => {
       const { username } = args;
       const { prisma, session } = context;
