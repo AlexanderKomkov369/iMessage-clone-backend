@@ -2,6 +2,7 @@ import { GraphQLError } from "graphql/error";
 import {
   CONVERSATION_NOT_FOUND,
   NOT_AUTHORIZED_ERROR,
+  PARTICIPANT_DOES_NOT_EXIST,
 } from "../../util/constants";
 import { Prisma } from "@prisma/client";
 import { MESSAGE_SENT } from "../../pubsub/constants";
@@ -15,7 +16,6 @@ import {
 import { withFilter } from "graphql-subscriptions";
 import { conversationPopulated } from "./conversation";
 import { userIsConversationParticipant } from "../../util/functions";
-import { instanceOf } from "graphql/jsutils/instanceOf";
 
 export const resolvers: Resolvers = {
   Query: {
@@ -37,7 +37,7 @@ export const resolvers: Resolvers = {
 
       const conversation = await prisma.conversation.findUnique({
         where: {
-          id: userId,
+          id: conversationId,
         },
         include: conversationPopulated,
       });
@@ -105,17 +105,29 @@ export const resolvers: Resolvers = {
           include: messagePopulated,
         });
 
+        // find conversationParticipant entity
+        const participant = await prisma.conversationParticipant.findFirst({
+          where: {
+            userId,
+            conversationId,
+          },
+        });
+
+        if (!participant) {
+          throw new GraphQLError(PARTICIPANT_DOES_NOT_EXIST);
+        }
+
         // update conversation entity
         const conversation = await prisma.conversation.update({
           where: {
-            id: senderId,
+            id: conversationId,
           },
           data: {
             latestMessageId: newMessage.id,
             participants: {
               update: {
                 where: {
-                  id: senderId,
+                  id: participant.id,
                 },
                 data: {
                   hasSeenLatestMessage: true,
@@ -124,7 +136,7 @@ export const resolvers: Resolvers = {
               updateMany: {
                 where: {
                   NOT: {
-                    id: senderId,
+                    userId,
                   },
                 },
                 data: {
@@ -133,6 +145,7 @@ export const resolvers: Resolvers = {
               },
             },
           },
+          include: conversationPopulated,
         });
 
         pubsub.publish(MESSAGE_SENT, { messageSent: newMessage });
