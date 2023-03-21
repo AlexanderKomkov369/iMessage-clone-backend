@@ -1,16 +1,79 @@
 import { GraphQLError } from "graphql/error";
-import { NOT_AUTHORIZED_ERROR } from "../../util/constants";
+import {
+  CONVERSATION_NOT_FOUND,
+  NOT_AUTHORIZED_ERROR,
+} from "../../util/constants";
 import { Prisma } from "@prisma/client";
 import { MESSAGE_SENT } from "../../pubsub/constants";
 import { GraphQLContext, Resolvers } from "../types/general";
 import {
+  MessagePopulated,
   MessageSentSubscriptionPayload,
+  SendGetMessagesArguments,
   SendMessageArguments,
 } from "../types/messages";
 import { withFilter } from "graphql-subscriptions";
+import { conversationPopulated } from "./conversation";
+import { userIsConversationParticipant } from "../../util/functions";
+import { instanceOf } from "graphql/jsutils/instanceOf";
 
 export const resolvers: Resolvers = {
-  Query: {},
+  Query: {
+    messages: async (
+      _: any,
+      args: SendGetMessagesArguments,
+      context
+    ): Promise<MessagePopulated[]> => {
+      const { session, prisma } = context;
+      const { conversationId } = args;
+
+      if (!session?.user) {
+        throw new GraphQLError(NOT_AUTHORIZED_ERROR);
+      }
+
+      const {
+        user: { id: userId },
+      } = session;
+
+      const conversation = await prisma.conversation.findUnique({
+        where: {
+          id: userId,
+        },
+        include: conversationPopulated,
+      });
+
+      if (!conversation) {
+        throw new GraphQLError(CONVERSATION_NOT_FOUND);
+      }
+
+      const isAllowedToView = userIsConversationParticipant(
+        conversation.participants,
+        userId
+      );
+
+      if (!isAllowedToView) {
+        throw new GraphQLError(NOT_AUTHORIZED_ERROR);
+      }
+
+      try {
+        const messages = await prisma.message.findMany({
+          where: {
+            conversationId,
+          },
+          include: messagePopulated,
+          orderBy: {
+            createdAt: "desc",
+          },
+        });
+
+        return messages;
+      } catch (error) {
+        console.log("Messages error: ", error);
+        const errorMessage = error instanceof Error ? error.message : "";
+        throw new GraphQLError(errorMessage);
+      }
+    },
+  },
   Mutation: {
     sendMessage: async (
       _: any,
@@ -96,7 +159,7 @@ export const resolvers: Resolvers = {
         },
         (
           payload: MessageSentSubscriptionPayload,
-          args: { conversationId: string }
+          args: SendGetMessagesArguments
         ) => {
           return payload.messageSent.conversationId === args.conversationId;
         }

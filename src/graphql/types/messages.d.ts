@@ -8,6 +8,10 @@ export interface SendMessageArguments {
   body: string;
 }
 
+export interface SendGetMessagesArguments {
+  conversationId: string;
+}
+
 export interface MessageSentSubscriptionPayload {
   messageSent: MessagePopulated;
 }
