@@ -1,4 +1,7 @@
-import { NOT_AUTHORIZED_ERROR } from "../../util/constants";
+import {
+  NOT_AUTHORIZED_ERROR,
+  PARTICIPANT_ENTITY_NOT_FOUND,
+} from "../../util/constants";
 import { Prisma } from "@prisma/client";
 import { CONVERSATION_CREATED } from "../../pubsub/constants";
 import { withFilter } from "graphql-subscriptions";
@@ -104,6 +107,47 @@ const resolvers: Resolvers = {
           throw new GraphQLError("Error creating conversation");
         }
       }
+    },
+    markConversationAsRead: async (
+      _: any,
+      args: { userId: string; conversationId: string },
+      context
+    ): Promise<boolean> => {
+      const { session, prisma } = context;
+      const { userId, conversationId } = args;
+
+      if (!session?.user) {
+        throw new GraphQLError(NOT_AUTHORIZED_ERROR);
+      }
+
+      try {
+        const participant = await prisma.conversationParticipant.findFirst({
+          where: {
+            conversationId,
+            userId,
+          },
+        });
+
+        if (!participant) {
+          throw new GraphQLError(PARTICIPANT_ENTITY_NOT_FOUND);
+        }
+
+        await prisma.conversationParticipant.update({
+          where: {
+            id: participant.id,
+          },
+          data: {
+            hasSeenLatestMessage: true,
+          },
+        });
+      } catch (error) {
+        console.log("markConversationAsRead error: ", error);
+        if (error instanceof Error) {
+          throw new GraphQLError(error?.message);
+        }
+      }
+
+      return true;
     },
   },
   Subscription: {
