@@ -3,14 +3,19 @@ import {
   PARTICIPANT_ENTITY_NOT_FOUND,
 } from "../../util/constants";
 import { Prisma } from "@prisma/client";
-import { CONVERSATION_CREATED } from "../../pubsub/constants";
+import {
+  CONVERSATION_CREATED,
+  CONVERSATION_UPDATED,
+} from "../../pubsub/constants";
 import { withFilter } from "graphql-subscriptions";
 import { GraphQLError } from "graphql/error";
 import { GraphQLContext, Resolvers } from "../types/general";
 import {
   ConversationCreatedSubscriptionPayload,
   ConversationPopulated,
+  ConversationUpdatedSubscriptionPayload,
 } from "../types/conversations";
+import { userIsConversationParticipant } from "../../util/functions";
 
 const resolvers: Resolvers = {
   Query: {
@@ -168,8 +173,47 @@ const resolvers: Resolvers = {
             conversationCreated: { participants },
           } = payload;
 
-          const userIsParticipant = !!participants.find(
-            (participant) => participant.userId === session?.user?.id
+          if (!session?.user) {
+            throw new GraphQLError(NOT_AUTHORIZED_ERROR);
+          }
+
+          const userIsParticipant = userIsConversationParticipant(
+            participants,
+            session?.user?.id
+          );
+
+          return userIsParticipant;
+        }
+      ),
+    },
+    conversationUpdated: {
+      subscribe: withFilter(
+        (_, __, context) => {
+          const { pubsub } = context;
+
+          return pubsub.asyncIterator([CONVERSATION_UPDATED]);
+        },
+        (
+          payload: ConversationUpdatedSubscriptionPayload,
+          _,
+          context: GraphQLContext
+        ) => {
+          const { session } = context;
+
+          if (!session?.user) {
+            throw new GraphQLError(NOT_AUTHORIZED_ERROR);
+          }
+
+          const { id: userId } = session.user;
+          const {
+            conversationUpdated: {
+              conversation: { participants },
+            },
+          } = payload;
+
+          const userIsParticipant = userIsConversationParticipant(
+            participants,
+            userId
           );
 
           return userIsParticipant;

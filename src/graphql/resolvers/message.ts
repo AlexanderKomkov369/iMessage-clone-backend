@@ -5,7 +5,7 @@ import {
   PARTICIPANT_DOES_NOT_EXIST,
 } from "../../util/constants";
 import { Prisma } from "@prisma/client";
-import { MESSAGE_SENT } from "../../pubsub/constants";
+import { CONVERSATION_UPDATED, MESSAGE_SENT } from "../../pubsub/constants";
 import { GraphQLContext, Resolvers } from "../types/general";
 import {
   MessagePopulated,
@@ -149,11 +149,11 @@ export const resolvers: Resolvers = {
         });
 
         pubsub.publish(MESSAGE_SENT, { messageSent: newMessage });
-        // pubsub.publish(CONVERSATION_UPDATED, {
-        //   conversationUpdated: {
-        //     conversation,
-        //   },
-        // });
+        pubsub.publish(CONVERSATION_UPDATED, {
+          conversationUpdated: {
+            conversation,
+          },
+        });
       } catch (error) {
         console.log("sendMessage error: ", error);
         throw new GraphQLError("Error sending message");
