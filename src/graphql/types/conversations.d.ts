@@ -21,3 +21,7 @@ export interface ConversationUpdatedSubscriptionPayload {
     conversation: ConversationPopulated;
   };
 }
+
+export interface ConversationDeletedSubscriptionPayload {
+  conversationDeleted: ConversationPopulated;
+}

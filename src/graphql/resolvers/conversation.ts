@@ -1,10 +1,14 @@
 import {
+  CONVERSATION_CREATING_ERROR,
+  CONVERSATION_DELETE_ERROR,
+  CONVERSATION_MARK_AS_READ_ERROR,
   NOT_AUTHORIZED_ERROR,
   PARTICIPANT_ENTITY_NOT_FOUND,
 } from "../../util/constants";
 import { Prisma } from "@prisma/client";
 import {
   CONVERSATION_CREATED,
+  CONVERSATION_DELETED,
   CONVERSATION_UPDATED,
 } from "../../pubsub/constants";
 import { withFilter } from "graphql-subscriptions";
@@ -12,6 +16,7 @@ import { GraphQLError } from "graphql/error";
 import { GraphQLContext, Resolvers } from "../types/general";
 import {
   ConversationCreatedSubscriptionPayload,
+  ConversationDeletedSubscriptionPayload,
   ConversationPopulated,
   ConversationUpdatedSubscriptionPayload,
 } from "../types/conversations";
@@ -109,7 +114,7 @@ const resolvers: Resolvers = {
       } catch (error) {
         console.log("createConversation error: ", error);
         if (error instanceof Error) {
-          throw new GraphQLError("Error creating conversation");
+          throw new GraphQLError(CONVERSATION_CREATING_ERROR);
         }
       }
     },
@@ -148,7 +153,51 @@ const resolvers: Resolvers = {
       } catch (error) {
         console.log("markConversationAsRead error: ", error);
         if (error instanceof Error) {
-          throw new GraphQLError(error?.message);
+          throw new GraphQLError(CONVERSATION_MARK_AS_READ_ERROR);
+        }
+      }
+
+      return true;
+    },
+    deleteConversation: async (
+      _: any,
+      args: { conversationId: string },
+      context
+    ): Promise<boolean> => {
+      const { session, prisma, pubsub } = context;
+      const { conversationId } = args;
+
+      if (!session?.user) {
+        throw new GraphQLError(NOT_AUTHORIZED_ERROR);
+      }
+
+      try {
+        const [deletedConversation] = await prisma.$transaction([
+          prisma.conversation.delete({
+            where: {
+              id: conversationId,
+            },
+            include: conversationPopulated,
+          }),
+          prisma.conversationParticipant.deleteMany({
+            where: {
+              conversationId,
+            },
+          }),
+          prisma.message.deleteMany({
+            where: {
+              conversationId,
+            },
+          }),
+        ]);
+
+        pubsub.publish(CONVERSATION_DELETED, {
+          conversationDeleted: deletedConversation,
+        });
+      } catch (error) {
+        console.log("deleteConversation error: ", error);
+        if (error instanceof Error) {
+          throw new GraphQLError(CONVERSATION_DELETE_ERROR);
         }
       }
 
@@ -211,12 +260,34 @@ const resolvers: Resolvers = {
             },
           } = payload;
 
-          const userIsParticipant = userIsConversationParticipant(
-            participants,
-            userId
-          );
+          return userIsConversationParticipant(participants, userId);
+        }
+      ),
+    },
+    conversationDeleted: {
+      subscribe: withFilter(
+        (_, __, context) => {
+          const { pubsub } = context;
 
-          return userIsParticipant;
+          return pubsub.asyncIterator([CONVERSATION_DELETED]);
+        },
+        (
+          payload: ConversationDeletedSubscriptionPayload,
+          _,
+          context: GraphQLContext
+        ) => {
+          const { session } = context;
+
+          if (!session?.user) {
+            throw new GraphQLError(NOT_AUTHORIZED_ERROR);
+          }
+
+          const { id: userId } = session.user;
+          const {
+            conversationDeleted: { participants },
+          } = payload;
+
+          return userIsConversationParticipant(participants, userId);
         }
       ),
     },
